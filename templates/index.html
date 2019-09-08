@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %} Chat {% endblock %}
+{% block content %}
+    <br>
+    <div class="row">
+        <div class="col-sm-12">
+            <div class="card">
+                <div class="card-body text-right">
+                    <i class="far fa-user"></i> {{session['fullname']}}  | 
+                    <i class="far fa-envelope-open"></i> {{session['email']}} 
+                    <a href="/logout" class="alert alert-primary">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col-md-6">
+            <ul class="list-group">
+                <li class="list-group-item active">Kullanıcılar</li>
+                {% for user in users %}
+                    <li id="{{user.id}}" class="list-group-item d-flex justify-content-between align-items-center user {{user.id}}{{session['id']}}">
+                        {{user.fullname}} | {{user.email}}
+                               
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="col-md-6">
+            
+            <input type="text" class="form-control sync" id="message" autocomplete="off">
+            <input type="hidden"  id="to">
+            <input type="hidden" id="from" value="{{session['id']}}">
+            <br>
+            <ul class="list-group list-group-flush messages" id="">
+                
+            </ul>
+        </div>
+    </div>
+{% endblock %}
+
+{% block js %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
+    <script>
+        $(document).ready(function () {
+
+            var fromto = 0;
+
+            // sending a connect request to the server.
+            const socket = io.connect('http://localhost:5000');
+
+            // An event handler for a change of value 
+            $('input.sync').on('keyup', function (event) {
+                const message = $.trim($(this).val());
+                if(event.keyCode != 13 || message == ''){
+                    return false;
+                }
+
+                const who = $('input#to').val();
+                socket.emit('send message', {
+                    who:  $('input#to').val(),
+                    from_id : $('input#from').val(),
+                    yollayan : "{{session['id']}}",
+                    data: message
+                });
+                $('input.sync').val('');
+
+                //kaldırılacak
+                const notReadMessageCount = $("li#" + who + ' span.badge-pill').text();
+                $("li#" + who + ' span.badge-pill').html('<i class="far fa-comments"></i> ' +(parseInt(notReadMessageCount) + 1))
+                return false;
+            });
+
+            socket.on('after connect', function (msg) {
+                console.log('After connect', msg);
+            });
+
+            socket.on('update value', function (message) {
+                $("ul#fromto" + message.tofrom).prepend(message.template);
+                $("ul#fromto" + message.fromto).prepend(message.template);
+            });
+
+            $("li.user").click(function(){
+                $("li.user").removeClass('list-group-item-success').children('span').remove();
+                const icon = `<span class="badge badge-primary badge-pill">
+                            <i class="far fa-comments"></i> 0
+                        </span>`;
+                $(this).addClass('list-group-item-success').append(icon);
+                const to = $(this).attr('id');
+                $("input#to").val(to);
+                
+                //tıkladığın kişinin mesajlarını getir...
+                getMessage(to)
+
+            });
+
+
+            //kaldırılacak
+            $("#message").focus(function(event){
+                const to = $("input#to").val();
+                if (to == ''){
+                    return false;
+                }
+
+                $.ajax({
+                    url: '/to-message-do-read',
+                    data: { to: to},
+                    method: 'POST',
+                    success: function (data) {
+                        $("li#"+to+' span.badge-pill').html('<i class="far fa-comments"></i> 0')
+                    }
+                });
+            });
+
+
+        });
+
+        function getMessage(to){
+            $.ajax({
+                url : '/getMessage',
+                data : {to:to},
+                method: 'POST',
+                success : function(data){
+                    $('ul.messages').html(data);
+                    fromto = to + "{{session['id']}}"
+                    $("ul.messages").attr("id", "fromto" + to + "{{session['id']}}")
+                }
+            });
+        }
+    </script>
+{% endblock %}
