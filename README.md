@@ -1,0 +1,4 @@
+# flashchat
+
+socketio
+flask
